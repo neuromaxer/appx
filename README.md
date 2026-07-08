@@ -1,10 +1,17 @@
 # Appx
 
-Agentic Application Proxy — a self-hostable tool to build and host personal apps with AI agents powered by Pi.
+Agentic Application Proxy — a self-hostable tool to build and host apps with AI agents powered by [Pi](https://pi.dev).
+
+![Appx dashboard](docs/readme-screenshot.png)
 
 ## What it does
 
 Appx is a management shell for running coding agents on a remote server. It provides authentication, TLS termination, a web dashboard, and a reverse proxy — so you can manage projects, chat with agents, and access agent-built apps from a browser over HTTPS.
+
+Appx works together with two sibling projects:
+
+- **[agent-server](https://github.com/appx-org/agent-server)** — the HTTP/SSE agent runtime that wraps Pi. It owns project identity, on-disk project directories, session transcripts, models, and credentials. Appx proxies session traffic to it.
+- **[agent-client](https://github.com/appx-org/agent-client)** — the TypeScript SDK and chat UI that talks to the agent-server `/v1` contract. Appx's frontend consumes it against the same-origin `/api/pi` mirror.
 
 ## Architecture
 
@@ -36,7 +43,7 @@ Pi is the agent runtime. In production appx runs as the `appx` systemd service a
 
 ## Prerequisites (production)
 
-A Linux host (Ubuntu 24.04 LTS recommended), `git`, **rootful Docker**, and the sibling `agent-server` + `agent-client` repos checked out next to `appx`. Then:
+A Linux host (Ubuntu 24.04 LTS recommended), `git`, **rootful Docker**, and the sibling [`agent-server`](https://github.com/appx-org/agent-server) + [`agent-client`](https://github.com/appx-org/agent-client) repos checked out next to `appx`. Then:
 
 ```bash
 cd /srv/appx
