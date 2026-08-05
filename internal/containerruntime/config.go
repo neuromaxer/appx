@@ -44,8 +44,11 @@ type Config struct {
 	// NoProxy is the NO_PROXY value (keeps in-container loopback direct).
 	NoProxy string
 
-	Memory string // optional --memory
-	CPUs   string // optional --cpus
+	// Memory and CPUs are the outer container's resource ceiling (--memory,
+	// --cpus). Empty defaults to DefaultMemory/DefaultCPUs; set to "unlimited"
+	// to omit the flag entirely and let the container use the whole host.
+	Memory string
+	CPUs   string
 
 	ReadinessURL string // agent-server health URL (e.g. http://127.0.0.1:4001/)
 
@@ -69,6 +72,21 @@ const (
 	// container process alive; appx ensures it exists/is-correct/is-healthy at
 	// startup; appx.service Restart=on-failure covers appx itself.
 	DefaultRestartPolicy = "unless-stopped"
+
+	// DefaultMemory and DefaultCPUs bound the outer container so an LLM-driven
+	// `npm install` or image build cannot exhaust the host. The agent runs
+	// untrusted, model-authored build steps, so "no limit" is not a safe
+	// default — especially once agent-server shares a host with other services
+	// (see openorange's Apps integration). These are conservative starting
+	// values, not measurements: Node plus nested podman builds need real
+	// headroom. Raise them via APPX_AGENT_MEMORY / APPX_AGENT_CPUS if builds are
+	// SIGKILLed near the ceiling.
+	DefaultMemory = "4g"
+	DefaultCPUs   = "2.0"
+
+	// UnlimitedResources opts out of the ceiling for a single field, restoring
+	// the pre-default behaviour of omitting the docker flag.
+	UnlimitedResources = "unlimited"
 )
 
 // BuildSpec turns a Config into a ContainerSpec, applying defaults. It is pure
@@ -94,6 +112,20 @@ func BuildSpec(cfg Config) ContainerSpec {
 	}
 	if cfg.RestartPolicy == "" {
 		cfg.RestartPolicy = DefaultRestartPolicy
+	}
+	if cfg.Memory == "" {
+		cfg.Memory = DefaultMemory
+	}
+	if cfg.CPUs == "" {
+		cfg.CPUs = DefaultCPUs
+	}
+	// "unlimited" is the explicit opt-out: clear the field so RunArgs omits the
+	// flag, which is what an empty value used to mean before these defaults.
+	if cfg.Memory == UnlimitedResources {
+		cfg.Memory = ""
+	}
+	if cfg.CPUs == UnlimitedResources {
+		cfg.CPUs = ""
 	}
 
 	env := map[string]string{

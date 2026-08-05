@@ -98,6 +98,11 @@ else
 #                      pull
 #   APPX_AGENT_SECCOMP — absolute path to the tailored seccomp profile
 #                        (deploy installs /etc/appx/seccomp-builder.json)
+#   APPX_AGENT_MEMORY  — outer container memory ceiling (default 4g). The agent
+#                        runs model-authored builds, so this is on by default;
+#                        raise it if builds are SIGKILLed. "unlimited" opts out.
+#   APPX_AGENT_CPUS    — outer container CPU ceiling (default 2.0). Same
+#                        semantics, including "unlimited".
 #   APPX_AGENT_ENV_PASSTHROUGH — comma-separated env var NAMES forwarded by name
 #                          into the container, for creds that must come from the
 #                          service env rather than the Settings UI (e.g. Bedrock).
@@ -115,6 +120,12 @@ APPX_AGENT_SERVER_URL=http://127.0.0.1:4001
 APPX_AGENT_CONTAINER=true
 APPX_AGENT_IMAGE=builder-outer
 APPX_AGENT_SECCOMP=/etc/appx/seccomp-builder.json
+# Resource ceiling for the outer container. Defaults (4g / 2.0) are applied in
+# code, so these stay commented unless this box needs different values. Node plus
+# nested podman builds want headroom — if a build dies near the ceiling, raise
+# memory rather than lowering it. Set to "unlimited" to omit the flag entirely.
+# APPX_AGENT_MEMORY=4g
+# APPX_AGENT_CPUS=2.0
 # Provider credentials: configure them in the Settings UI (stored in the agent's
 # Pi credential storage, persisted in the builder-workspace volume) — this is the
 # path for Anthropic and most providers. ONLY creds that the Settings UI can't

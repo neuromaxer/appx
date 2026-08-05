@@ -139,20 +139,48 @@ func TestRunArgs_VerbatimSecurityFlagSet(t *testing.T) {
 	}
 }
 
-func TestRunArgs_OptionalLimits(t *testing.T) {	spec := testSpec()
+// TestRunArgs_ResourceLimits covers the outer container's resource ceiling: it
+// is ON by default (an LLM-driven build must not be able to exhaust the host),
+// overridable, and explicitly opt-out-able via "unlimited".
+func TestRunArgs_ResourceLimits(t *testing.T) {
+	// Default: the ceiling is applied without the operator asking for it.
+	joined := strings.Join(testSpec().RunArgs(), " ")
+	if !strings.Contains(joined, "--memory "+DefaultMemory) {
+		t.Errorf("default spec should include --memory %s, got %s", DefaultMemory, joined)
+	}
+	if !strings.Contains(joined, "--cpus "+DefaultCPUs) {
+		t.Errorf("default spec should include --cpus %s, got %s", DefaultCPUs, joined)
+	}
+
+	// Explicit values override the defaults.
+	spec := testSpec()
 	spec.Memory = "2g"
-	spec.CPUs = "2.0"
-	joined := strings.Join(spec.RunArgs(), " ")
+	spec.CPUs = "1.5"
+	joined = strings.Join(spec.RunArgs(), " ")
 	if !strings.Contains(joined, "--memory 2g") {
 		t.Errorf("expected --memory 2g, got %s", joined)
 	}
-	if !strings.Contains(joined, "--cpus 2.0") {
-		t.Errorf("expected --cpus 2.0, got %s", joined)
+	if !strings.Contains(joined, "--cpus 1.5") {
+		t.Errorf("expected --cpus 1.5, got %s", joined)
 	}
 
-	// Default spec must NOT emit empty limits.
-	if strings.Contains(strings.Join(testSpec().RunArgs(), " "), "--memory") {
-		t.Error("default spec should not include --memory")
+	// "unlimited" omits the flag entirely, restoring the pre-default behaviour.
+	unlimited := BuildSpec(Config{
+		Image:              "builder-outer",
+		Name:               "builder-outer",
+		SeccompProfilePath: "/etc/appx/seccomp-builder.json",
+		APIPort:            4001,
+		AppPortStart:       10000,
+		AppPortEnd:         10199,
+		Memory:             UnlimitedResources,
+		CPUs:               UnlimitedResources,
+	})
+	joined = strings.Join(unlimited.RunArgs(), " ")
+	if strings.Contains(joined, "--memory") {
+		t.Errorf("Memory=%q should omit --memory, got %s", UnlimitedResources, joined)
+	}
+	if strings.Contains(joined, "--cpus") {
+		t.Errorf("CPUs=%q should omit --cpus, got %s", UnlimitedResources, joined)
 	}
 }
 
