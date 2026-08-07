@@ -99,6 +99,7 @@ local-only state: land the change in appx-agent, then bump the version range in
 task local              # Build and run appx in HTTP dev mode (127.0.0.1.sslip.io)
 task test               # Run all Go tests
 task lint               # Lint the frontend
+task agent:sync         # Sync web/package.json after editing AGENT_VERSION
 task server:bootstrap   # First-time server setup (production, container mode)
 task server:deploy      # Pull, build, install, restart (production)
 task server:verify      # Post-deploy verification (production)

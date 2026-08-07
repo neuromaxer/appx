@@ -10,6 +10,7 @@ task build          # Build frontend + Go binary -> ./appx (without running)
 task web            # Build frontend only, copy to cmd/appx/web/dist
 task test           # Run all Go tests
 task lint           # Lint frontend
+task agent:sync     # Sync web/package.json after editing AGENT_VERSION
 task clean          # Remove build artifacts
 ./appx -port 8443   # Run (default port 443, requires root)
 ```
@@ -35,7 +36,11 @@ The agent stack lives in the separate [appx-agent](https://github.com/appx-org/a
 - **Docs** — use `$(cat AGENT_VERSION)` in copy-pasteable commands.
 - **npm** — `web/package.json` is the one unavoidable copy, since npm resolves only from `package.json`.
 
-To upgrade: edit `AGENT_VERSION`, then `cd web && npm install`, then `task test`. Three tests enforce this: `TestDefaultImage_DerivesFromAgentVersion`, `TestNoHardcodedImageTagsInShell` (rejects a pasted tag in any deploy script), and `TestAgentVersion_MatchesWebPackageJSON` (fails if you skip the `npm install`). Pin a semver tag or digest — never `latest`/`edge`, which would make deploys irreproducible.
+**To upgrade the agent stack:** edit `AGENT_VERSION`, then `task agent:sync`, then `task test`.
+
+`agent:sync` exists because a bare `npm install` does *not* rewrite the dependency range — it resolves *within* the existing `^x.y.z`, so bumping `AGENT_VERSION` alone would silently leave the frontend on the old version. The task uses `npm pkg set` to rewrite the range, then installs.
+
+Three tests enforce the invariants: `TestDefaultImage_DerivesFromAgentVersion`, `TestNoHardcodedImageTagsInShell` (rejects a pasted tag in any deploy script), and `TestAgentVersion_MatchesWebPackageJSON` (fails if you skip `agent:sync`). Pin a semver tag or digest — never `latest`/`edge`, which would make deploys irreproducible.
 
 The outer container's **tailored seccomp profile** is a `docker run --security-opt` argument, so it must be a host file. `deploy/tools-install.sh` extracts it from the pulled image (`/opt/appx/seccomp-builder.json` → `/etc/appx/seccomp-builder.json`) rather than vendoring a copy, so the applied profile is always the one the image was built with. Do not reintroduce a checked-in copy.
 

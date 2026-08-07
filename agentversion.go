@@ -14,12 +14,15 @@
 // To move to a new agent release:
 //
 //	1. edit AGENT_VERSION
-//	2. cd web && npm install   (updates package.json + the lockfile)
-//	3. task test               (fails if step 2 was skipped)
+//	2. task agent:sync   (rewrites web/package.json's range + the lockfile)
+//	3. task test         (fails if step 2 was skipped)
 //
 // The web/package.json range is the one copy that cannot be eliminated — npm
-// resolves dependencies only from package.json — so TestWebPackageJSON_MatchesAgentVersion
-// asserts it agrees with this file.
+// resolves dependencies only from package.json — so
+// TestAgentVersion_MatchesWebPackageJSON asserts it agrees with this file. Note
+// that a bare `npm install` is NOT enough for step 2: it resolves within the
+// existing caret range, so it would leave the frontend on the old version.
+// `task agent:sync` uses `npm pkg set` to rewrite the range itself.
 package appx
 
 import (

@@ -140,8 +140,8 @@ move the whole checkout to a new agent release:
 
 ```bash
 echo 0.1.8 > AGENT_VERSION
-cd web && npm install && cd ..   # updates package.json + lockfile
-task test                        # fails if you skip the npm install
+task agent:sync   # rewrites web/package.json's range + the lockfile
+task test         # fails if you skip agent:sync
 ```
 
 Then deploy normally with `task server:deploy`.

@@ -525,7 +525,9 @@ func TestAgentVersion_MatchesWebPackageJSON(t *testing.T) {
 	// exact resolution. What matters is that the floor tracks AGENT_VERSION.
 	if want := "^" + appx.AgentVersion; got != want {
 		t.Errorf("%s pins %s at %q but AGENT_VERSION is %q (want %q).\n"+
-			"After editing AGENT_VERSION run: cd web && npm install",
+			"After editing AGENT_VERSION run: task agent:sync\n"+
+			"(a bare `npm install` will not fix this — it resolves within the "+
+			"existing range instead of rewriting it)",
 			path, dep, got, appx.AgentVersion, want)
 	}
 }

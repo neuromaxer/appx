@@ -22,3 +22,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Transient backups written by `task agent:sync` (removed on success,
+# restored-from on failure). Should never be committed.
+.package.json.bak
+.package-lock.json.bak
