@@ -18,6 +18,13 @@ if [ "$(id -u)" -ne 0 ]; then
   exit 1
 fi
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# The pinned agent-server image (AGENT_IMAGE), from the repo-root AGENT_VERSION
+# file. Used only as the fallback when the env file doesn't name one.
+# shellcheck source=agent-version.sh
+. "$SCRIPT_DIR/agent-version.sh"
+
 PASS=0
 FAIL=0
 
@@ -179,7 +186,7 @@ echo "=== 7. Outer image ==="
 # ---------------------------------------------------------------------------
 
 APPX_AGENT_IMAGE=$(grep '^APPX_AGENT_IMAGE=' "$ENV_FILE" 2>/dev/null | cut -d= -f2- || true)
-APPX_AGENT_IMAGE="${APPX_AGENT_IMAGE:-ghcr.io/appx-org/agent-server:0.1.7}"
+APPX_AGENT_IMAGE="${APPX_AGENT_IMAGE:-$AGENT_IMAGE}"
 expect_ok "outer image '$APPX_AGENT_IMAGE' present" \
   docker image inspect "$APPX_AGENT_IMAGE"
 

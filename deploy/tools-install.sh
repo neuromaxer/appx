@@ -30,10 +30,10 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-# The published agent-server image appx is tested against. Keep in sync with
-# containerruntime.DefaultImage (internal/containerruntime/config.go) and the
-# APPX_AGENT_IMAGE default written by bootstrap.sh.
-DEFAULT_AGENT_IMAGE="ghcr.io/appx-org/agent-server:0.1.7"
+# The pinned agent-server image, read from the repo-root AGENT_VERSION file (the
+# single source of truth, also embedded into the appx binary). Sets AGENT_IMAGE.
+# shellcheck source=agent-version.sh
+. "$SCRIPT_DIR/agent-version.sh"
 
 # Detect architecture.
 ARCH=$(dpkg --print-architecture 2>/dev/null || echo "amd64")
@@ -139,7 +139,7 @@ command -v docker >/dev/null 2>&1 && RUNTIME="docker"
 # Pin the image. agent-server is published from the appx-org/appx-agent monorepo;
 # appx consumes the published artifact and never builds it from source. Override
 # APPX_AGENT_IMAGE to move to another tag or to pin by digest.
-APPX_AGENT_IMAGE="${APPX_AGENT_IMAGE:-$DEFAULT_AGENT_IMAGE}"
+APPX_AGENT_IMAGE="${APPX_AGENT_IMAGE:-$AGENT_IMAGE}"
 
 if [ -z "$RUNTIME" ]; then
   echo "ERROR: no docker found — the outer runtime MUST be rootful host Docker." >&2
@@ -200,7 +200,7 @@ else
   echo "       (docker's default seccomp blocks mount(2) and breaks nested" >&2
   echo "       rootless podman; seccomp=unconfined is not an acceptable" >&2
   echo "       substitute). Use an agent-server image that bakes it in —" >&2
-  echo "       $DEFAULT_AGENT_IMAGE or newer." >&2
+  echo "       $AGENT_IMAGE or newer." >&2
   exit 1
 fi
 

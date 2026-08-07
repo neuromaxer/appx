@@ -19,6 +19,11 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 ENV_FILE="/etc/appx/appx.env"
 
+# The pinned agent-server image (AGENT_IMAGE), read from the repo-root
+# AGENT_VERSION file and interpolated into the generated env file below.
+# shellcheck source=agent-version.sh
+. "$SCRIPT_DIR/agent-version.sh"
+
 # ---------------------------------------------------------------------------
 # 1. Server configuration (interactive on first run only).
 # ---------------------------------------------------------------------------
@@ -118,9 +123,10 @@ APPX_AGENT_SERVER_URL=http://127.0.0.1:4001
 
 # --- Container mode (the only deploy path): appx manages the outer container ---
 APPX_AGENT_CONTAINER=true
-# The published agent-server image (appx-org/appx-agent monorepo). Keep in sync
-# with tools-install.sh's DEFAULT_AGENT_IMAGE and containerruntime.DefaultImage.
-APPX_AGENT_IMAGE=ghcr.io/appx-org/agent-server:0.1.7
+# The published agent-server image (appx-org/appx-agent monorepo), pinned by the
+# repo's AGENT_VERSION file at bootstrap time. Change it here to move this box to
+# a different agent release, then re-run tools-install.sh to pull it.
+APPX_AGENT_IMAGE=$AGENT_IMAGE
 APPX_AGENT_SECCOMP=/etc/appx/seccomp-builder.json
 # Resource ceiling for the outer container. Defaults (4g / 2.0) are applied in
 # code, so these stay commented unless this box needs different values. Node plus

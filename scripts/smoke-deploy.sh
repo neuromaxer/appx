@@ -19,8 +19,13 @@ REPO_DIR="$(pwd)"
 
 # ── config ───────────────────────────────────────────────────────────────────
 
+# The pinned agent-server image (AGENT_IMAGE), from the repo-root AGENT_VERSION
+# file — the same source the deploy scripts and the appx binary use.
+# shellcheck source=../deploy/agent-version.sh
+. "$REPO_DIR/deploy/agent-version.sh"
+
 readonly NAME="builder-outer"
-readonly IMAGE="${APPX_AGENT_IMAGE:-ghcr.io/appx-org/agent-server:0.1.7}"
+readonly IMAGE="${APPX_AGENT_IMAGE:-$AGENT_IMAGE}"
 readonly PROJECT="smoke-app"
 readonly APP_PORT=8080                      # vite-spa template's nginx listen
 APPX_PORT="${APPX_PORT:-8088}"

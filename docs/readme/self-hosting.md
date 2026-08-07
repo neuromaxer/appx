@@ -131,13 +131,23 @@ force a fresh image/env).
 ## Updating the agent (Pi / agent-server)
 
 Pi and agent-server run **inside** the agent-server image, so updating them means
-moving to a newer published image. The version appx is tested against is pinned
-in three places that must agree (a Go test enforces it):
-`containerruntime.DefaultImage`, `DEFAULT_AGENT_IMAGE` in
-`deploy/tools-install.sh`, and `APPX_AGENT_IMAGE` in `deploy/bootstrap.sh`.
+moving to a newer published image.
 
-To move an existing box to a different version without changing appx, set the
-ref in `/etc/appx/appx.env` and recreate:
+The version appx is tested against lives in the **`AGENT_VERSION`** file at the
+repo root — one line, the single source of truth for both the docker image and the
+`@appx-org/agent-client` npm package (appx-agent versions them in lockstep). To
+move the whole checkout to a new agent release:
+
+```bash
+echo 0.1.8 > AGENT_VERSION
+cd web && npm install && cd ..   # updates package.json + lockfile
+task test                        # fails if you skip the npm install
+```
+
+Then deploy normally with `task server:deploy`.
+
+To move an existing box to a different version **without** changing the checkout,
+set the ref in `/etc/appx/appx.env` and recreate:
 
 ```bash
 sudo sed -i 's|^APPX_AGENT_IMAGE=.*|APPX_AGENT_IMAGE=ghcr.io/appx-org/agent-server:X.Y.Z|' /etc/appx/appx.env
@@ -182,6 +192,7 @@ docker logs -f builder-outer     # agent-server (inside the outer container)
 | `deploy/bootstrap.sh`           | Day 1            | Full setup: user, dirs, tools, agent image, build, start, verify |
 | `deploy/system-setup.sh`        | Infra changes    | appx user, projects group, dirs, `/etc/appx`, docker group, unit |
 | `deploy/tools-install.sh`       | Tool updates     | Go, Node.js 24, Task, + pulls the agent image and extracts its seccomp profile |
+| `deploy/agent-version.sh`       | sourced, not run | Resolves `AGENT_VERSION` → `$AGENT_IMAGE` for the other scripts |
 | `deploy/appx.service`           | systemd unit     | `appx` unit (container mode; ordered after `docker.service`) |
 | `deploy/verify-installation.sh` | After any change | Full system verification                                   |
 | `deploy/teardown.sh`            | Uninstall & cleanup | Reverse everything created by bootstrap.sh                        |

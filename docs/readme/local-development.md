@@ -23,6 +23,10 @@ Point the container's `/workspace` at the **same** projects directory appx uses.
 agent-server owns the project directories, and appx's subdomain proxy and
 terminal read them from that shared path, so the two must agree.
 
+Run it from the repo root so `AGENT_VERSION` resolves — that file is the single
+source of truth for which agent release this appx checkout targets, so the
+command below always matches what a deploy would pull:
+
 ```bash
 mkdir -p ~/appx-data/projects
 
@@ -30,7 +34,7 @@ docker run --rm -it \
   --name agent-server-dev \
   -p 127.0.0.1:4001:4001 \
   -v ~/appx-data/projects:/workspace \
-  ghcr.io/appx-org/agent-server:0.1.7
+  "ghcr.io/appx-org/agent-server:$(cat AGENT_VERSION)"
 ```
 
 The image is amd64-only today, so on Apple Silicon add `--platform linux/amd64`

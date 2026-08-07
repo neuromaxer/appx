@@ -22,13 +22,20 @@ Single Go binary serves everything on one port (HTTPS or HTTP in dev mode). Pi r
 
 The agent stack lives in the separate [appx-agent](https://github.com/appx-org/appx-agent) monorepo and is consumed **only as published artifacts** — never as sibling checkouts or vendored copies:
 
-| Artifact | Consumed as | Pinned in |
-| --- | --- | --- |
-| `agent-server` | `ghcr.io/appx-org/agent-server` docker image (public, amd64-only) | `containerruntime.DefaultImage`, `DEFAULT_AGENT_IMAGE` in `deploy/tools-install.sh`, `APPX_AGENT_IMAGE` in `deploy/bootstrap.sh` |
-| `@appx-org/agent-client` | public npm package (ships compiled `dist/`) | `web/package.json` |
-| `@appx-org/agent-protocol` | public npm, transitive via agent-client | — |
+| Artifact | Consumed as |
+| --- | --- |
+| `agent-server` | `ghcr.io/appx-org/agent-server` docker image (public, amd64-only) |
+| `@appx-org/agent-client` | public npm package (ships compiled `dist/`) |
+| `@appx-org/agent-protocol` | public npm, transitive via agent-client |
 
-The image ref is duplicated in three files because shell cannot import Go constants; `TestDefaultImage_MatchesDeployScripts` fails the build if they drift. Pin a semver tag or digest — never `latest`/`edge`, which would make deploys irreproducible.
+**`AGENT_VERSION` (repo root) is the single source of truth for all three.** changesets versions them in lockstep, so one string pins the whole stack. Never hardcode an agent version or image tag anywhere else:
+
+- **Go** — `agentversion.go` (package `appx`, at the repo root so `go:embed` can reach the file; `..` patterns are rejected) embeds it and exposes `AgentVersion`/`AgentImage`. `containerruntime.DefaultImage` derives from it.
+- **Shell** — source `deploy/agent-version.sh`, which sets `$AGENT_VERSION`/`$AGENT_IMAGE`. Requires bash (it uses `BASH_SOURCE`) and fails loudly under sh/zsh rather than silently resolving the wrong path.
+- **Docs** — use `$(cat AGENT_VERSION)` in copy-pasteable commands.
+- **npm** — `web/package.json` is the one unavoidable copy, since npm resolves only from `package.json`.
+
+To upgrade: edit `AGENT_VERSION`, then `cd web && npm install`, then `task test`. Three tests enforce this: `TestDefaultImage_DerivesFromAgentVersion`, `TestNoHardcodedImageTagsInShell` (rejects a pasted tag in any deploy script), and `TestAgentVersion_MatchesWebPackageJSON` (fails if you skip the `npm install`). Pin a semver tag or digest — never `latest`/`edge`, which would make deploys irreproducible.
 
 The outer container's **tailored seccomp profile** is a `docker run --security-opt` argument, so it must be a host file. `deploy/tools-install.sh` extracts it from the pulled image (`/opt/appx/seccomp-builder.json` → `/etc/appx/seccomp-builder.json`) rather than vendoring a copy, so the applied profile is always the one the image was built with. Do not reintroduce a checked-in copy.
 
@@ -44,6 +51,8 @@ Auth uses a single-user password login with an `appx_session` cookie, bcrypt pas
 ## Project Structure
 
 ```text
+AGENT_VERSION                  # Pinned appx-agent release — single source of truth
+agentversion.go                # package appx: embeds AGENT_VERSION (root so go:embed can reach it)
 cmd/appx/main.go               # Entry point, CLI flags, dependency wiring
 internal/
   agentserver/
@@ -83,6 +92,7 @@ deploy/
   bootstrap.sh                 # Full install/update flow (container mode only)
   system-setup.sh              # appx user, projects group, dirs, /etc/appx, docker group, unit
   tools-install.sh             # Go, Node.js, Task, + pulls the agent image & extracts its seccomp profile
+  agent-version.sh             # Sourced by the above: AGENT_VERSION -> $AGENT_IMAGE
 ```
 
 ## Tech Stack
