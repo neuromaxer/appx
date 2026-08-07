@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	appx "github.com/neuromaxer/appx"
 )
 
 // Config is the appx-side configuration used to build a ContainerSpec. It is
@@ -58,9 +60,20 @@ type Config struct {
 	RestartPolicy string
 }
 
+// DefaultImage is the published agent-server image appx pulls and supervises.
+// The version comes from the repo-root AGENT_VERSION file (embedded, so the Go
+// binary and the deploy scripts cannot disagree) — never hardcode a tag here.
+// Override per-deployment with APPX_AGENT_IMAGE (a tag or a @sha256: digest).
+//
+// This is a var rather than a const only because it is derived from the embedded
+// file at init; treat it as read-only.
+var DefaultImage = appx.AgentImage
+
 // defaults for the named volumes and bind hosts — match the proven run-outer.sh.
 const (
-	DefaultImage           = "builder-outer"
+	// DefaultName is the local docker container name — unrelated to the image
+	// ref, and kept stable so existing deployments' troubleshooting commands
+	// (docker logs builder-outer) and volumes keep working.
 	DefaultName            = "builder-outer"
 	DefaultWorkspaceVolume = "builder-workspace"
 	DefaultPodmanVolume    = "builder-podman-storage"

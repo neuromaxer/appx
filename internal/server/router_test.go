@@ -1575,7 +1575,7 @@ func TestChangePassword_InvalidatesOtherSessions(t *testing.T) {
 	}
 }
 
-// --- agent-server /v1 mirror (agent-chat SDK gateway) ---------------------
+// --- agent-server /v1 mirror (agent-client SDK gateway) ---------------------
 
 func TestAgentMirror_RequiresAuth(t *testing.T) {
 	handler, _, db := setupTestWithAgentServerBackend(t, "http://127.0.0.1:4001", "")
@@ -1774,7 +1774,7 @@ func TestAgentMirror_ClearsWriteDeadline(t *testing.T) {
 	}
 }
 
-// TestAgentMirror_AllowsBodylessPost reproduces the agent-chat SDK's
+// TestAgentMirror_AllowsBodylessPost reproduces the agent-client SDK's
 // createSession/abort calls: a POST with no body and no Content-Type. These
 // must be forwarded, not rejected with 415 by requireJSON (regression: the
 // mirror is mounted outside the requireJSON-wrapped api mux for this reason).

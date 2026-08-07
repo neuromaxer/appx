@@ -5,6 +5,7 @@ import {
   getProject,
   getServerConfig,
   logout,
+  redirectToLogin,
   type Project as ProjectType,
 } from '../api/client';
 import Terminal from '../components/Terminal';
@@ -43,9 +44,7 @@ export default function Project() {
       createAgentClient({
         baseUrl: '/api/pi',
         pathPrefix: '/v1',
-        onUnauthorized: () => {
-          window.location.href = '/login';
-        },
+        onUnauthorized: redirectToLogin,
       }),
     [],
   );

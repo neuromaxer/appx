@@ -75,7 +75,7 @@ func NewRouter(a *auth.Auth, pm *project.Manager, webFS fs.FS, rcfg RouterConfig
 	mux.Handle("PUT /api/shell/{id}", a.Middleware(limitBody(requireJSON(http.HandlerFunc(handleShellResize(lm))))))
 	mux.Handle("GET /api/shell/{id}/connect", a.Middleware(http.HandlerFunc(handleShellConnect(lm))))
 
-	// agent-chat SDK gateway: same-origin 1:1 mirror of the agent-server /v1
+	// agent-client SDK gateway: same-origin 1:1 mirror of the agent-server /v1
 	// contract. Mounted on the top-level mux (auth + body limit) rather than the
 	// requireJSON-wrapped api mux, because the SDK issues legitimate *bodyless*
 	// POSTs (create session, abort) that requireJSON would reject with 415. The

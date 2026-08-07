@@ -19,6 +19,11 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 ENV_FILE="/etc/appx/appx.env"
 
+# The pinned agent-server image (AGENT_IMAGE), read from the repo-root
+# AGENT_VERSION file and interpolated into the generated env file below.
+# shellcheck source=agent-version.sh
+. "$SCRIPT_DIR/agent-version.sh"
+
 # ---------------------------------------------------------------------------
 # 1. Server configuration (interactive on first run only).
 # ---------------------------------------------------------------------------
@@ -94,10 +99,10 @@ else
 #   CLOUDFLARE_API_TOKEN — Cloudflare API token for DNS-01 challenge (optional)
 #   APPX_AGENT_CONTAINER — always "true": appx creates/supervises the
 #                          agent-server OUTER container (the only deploy mode)
-#   APPX_AGENT_IMAGE — outer image tag (built locally) or registry ref/digest to
-#                      pull
+#   APPX_AGENT_IMAGE — published agent-server image ref to pull (tag or digest)
 #   APPX_AGENT_SECCOMP — absolute path to the tailored seccomp profile
-#                        (deploy installs /etc/appx/seccomp-builder.json)
+#                        (tools-install.sh extracts it from the image to
+#                        /etc/appx/seccomp-builder.json)
 #   APPX_AGENT_MEMORY  — outer container memory ceiling (default 4g). The agent
 #                        runs model-authored builds, so this is on by default;
 #                        raise it if builds are SIGKILLed. "unlimited" opts out.
@@ -118,7 +123,10 @@ APPX_AGENT_SERVER_URL=http://127.0.0.1:4001
 
 # --- Container mode (the only deploy path): appx manages the outer container ---
 APPX_AGENT_CONTAINER=true
-APPX_AGENT_IMAGE=builder-outer
+# The published agent-server image (appx-org/appx-agent monorepo), pinned by the
+# repo's AGENT_VERSION file at bootstrap time. Change it here to move this box to
+# a different agent release, then re-run tools-install.sh to pull it.
+APPX_AGENT_IMAGE=$AGENT_IMAGE
 APPX_AGENT_SECCOMP=/etc/appx/seccomp-builder.json
 # Resource ceiling for the outer container. Defaults (4g / 2.0) are applied in
 # code, so these stay commented unless this box needs different values. Node plus

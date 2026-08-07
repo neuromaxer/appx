@@ -4,23 +4,25 @@
 #
 # Must be run as root. Safe to run multiple times (idempotent).
 #
-# Deploy is CONTAINER MODE ONLY (Stage 4): appx runs as the `appx` systemd
-# service and creates/supervises the agent-server OUTER container itself (one
-# unprivileged container holding agent-server + rootless podman). There is no
-# host `appx-agent` user, no host `agent-server.service`, and no host install of
+# Deploy is CONTAINER MODE ONLY: appx runs as the `appx` systemd service and
+# creates/supervises the agent-server OUTER container itself (one unprivileged
+# container holding agent-server + rootless podman). There is no host
+# `appx-agent` user, no host `agent-server.service`, and no host install of
 # Node/Pi/agent-server. Local development does not use this script — a developer
-# runs agent-server by hand and `appx --http` with APPX_AGENT_SERVER_URL.
+# runs the agent-server image by hand and `appx --http` with
+# APPX_AGENT_SERVER_URL.
 #
 # What this script does:
 #   1. Reads APPX_DATA from /etc/appx/appx.env (falls back to /var/lib/appx)
 #   2. Creates the appx user (home = data dir) and the shared projects group
 #   3. Sets up directories with correct ownership and permissions
-#   4. Installs the tailored seccomp profile to /etc/appx/
+#   4. Creates /etc/appx for config + the extracted seccomp profile
 #   5. Adds appx to the docker group so the service can drive the daemon
 #   6. Copies the appx systemd service file and enables it
 #
 # What this script does NOT do:
-#   - Install Go, Node, Pi, agent-server, or the outer image (use tools-install.sh)
+#   - Install Go, Node, or pull the agent-server image (use tools-install.sh)
+#   - Install the seccomp profile (tools-install.sh extracts it from the image)
 #   - Copy the appx binary (handled by bootstrap.sh / server:deploy)
 
 set -euo pipefail
@@ -98,18 +100,14 @@ install -d -o appx -g projects -m 2770 "$DATA_DIR/projects"
 echo "directory ready: $DATA_DIR/projects (appx:projects 2770)"
 
 # ---------------------------------------------------------------------------
-# Container mode: the seccomp profile appx references + docker access
+# Container mode: config dir + docker access
 # ---------------------------------------------------------------------------
 
-# The tailored seccomp profile is the security boundary; appx references it by
-# absolute path at `docker run` time. Install it where APPX_AGENT_SECCOMP points.
+# /etc/appx holds appx.env, secrets.env, and the seccomp profile. The profile
+# itself is NOT installed here: it is extracted from the agent-server image by
+# tools-install.sh (which runs after this script), so that the profile appx
+# applies is always the one the pulled image was built with.
 install -d -m 755 /etc/appx
-if [ -f "$SCRIPT_DIR/builder-container/seccomp-builder.json" ]; then
-  install -m 644 "$SCRIPT_DIR/builder-container/seccomp-builder.json" /etc/appx/seccomp-builder.json
-  echo "installed seccomp profile → /etc/appx/seccomp-builder.json"
-else
-  echo "WARNING: seccomp-builder.json not found in $SCRIPT_DIR/builder-container/ — set APPX_AGENT_SECCOMP manually"
-fi
 
 if ! command -v docker >/dev/null 2>&1; then
   echo "WARNING: docker is not installed. The outer runtime MUST be rootful host"

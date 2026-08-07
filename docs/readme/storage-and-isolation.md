@@ -33,8 +33,8 @@ container crash, `docker rm -f`, recreate, and host reboot. Only an explicit
 the outer container be safely recreated (to pick up a new image or env) without
 losing projects or sessions.
 
-> Local co-located dev is different: there agent-server runs on the host and
-> writes projects to `{data}/projects/` directly (see
+> Local co-located dev is different: there you bind-mount `{data}/projects/` into
+> the agent-server container, so projects land on the host (see
 > [Local Development](./local-development.md)). In production (container mode)
 > projects live in the `builder-workspace` volume, not on the host.
 
@@ -72,8 +72,10 @@ Two residual-risk notes, both accepted for a dedicated single-purpose box:
   docker-socket proxy or a narrow sudoers rule) is tracked as hardening.
 - **The outer container's security boundary is the load-bearing isolation**:
   unprivileged (`Privileged=false`, no added caps, no `/dev/fuse`), a tailored
-  seccomp profile, and loopback-only port publishes. See
-  `agent-server/container/SPIKE-FINDINGS.md` for the full justification.
+  seccomp profile (extracted from the agent-server image at install time), and
+  loopback-only port publishes. See
+  [`packages/agent-server/container/SPIKE-FINDINGS.md`](https://github.com/appx-org/appx-agent/blob/main/packages/agent-server/container/SPIKE-FINDINGS.md)
+  in appx-agent for the full justification.
 
 ## Caveats
 

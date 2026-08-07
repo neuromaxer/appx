@@ -2,6 +2,7 @@ package containerruntime
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -9,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	appx "github.com/neuromaxer/appx"
 )
 
 // scriptedCall is one recorded/expected CLI invocation for fakeRunner.
@@ -411,6 +414,121 @@ func TestLoadOrCreateToken_TightensPerms(t *testing.T) {
 	info, _ := os.Stat(path)
 	if perm := info.Mode().Perm(); perm != 0600 {
 		t.Errorf("expected perms tightened to 0600, got %o", perm)
+	}
+}
+
+// --- the pinned agent image -------------------------------------------------
+
+// TestDefaultImage_IsPublishedRegistryRef guards the shape of the pinned image:
+// appx consumes the agent-server artifact published from the appx-org/appx-agent
+// monorepo, so the default must be a pullable registry reference. A bare local
+// tag (the pre-monorepo default was "builder-outer") would make a fresh deploy
+// fail at pull time on any box that never built the image by hand.
+func TestDefaultImage_IsPublishedRegistryRef(t *testing.T) {
+	if !strings.Contains(DefaultImage, "/") {
+		t.Errorf("DefaultImage %q is not a registry reference — deploy pulls it", DefaultImage)
+	}
+	if !strings.HasPrefix(DefaultImage, "ghcr.io/appx-org/agent-server") {
+		t.Errorf("DefaultImage %q is not the published agent-server image", DefaultImage)
+	}
+	// Unpinned images make deploys irreproducible: two boxes bootstrapped a week
+	// apart would silently run different agent versions.
+	if !strings.Contains(DefaultImage, ":") || strings.HasSuffix(DefaultImage, ":latest") ||
+		strings.HasSuffix(DefaultImage, ":edge") {
+		t.Errorf("DefaultImage %q must pin a semver tag or digest, not a floating tag", DefaultImage)
+	}
+	// DefaultName is the local container name, a distinct concept — if it ever
+	// picks up the registry ref, `docker logs builder-outer` and the volumes
+	// break.
+	if strings.Contains(DefaultName, "/") {
+		t.Errorf("DefaultName %q must stay a plain container name", DefaultName)
+	}
+}
+
+// TestDefaultImage_DerivesFromAgentVersion asserts the Go default is built from
+// the embedded AGENT_VERSION file rather than a tag pasted into this package.
+func TestDefaultImage_DerivesFromAgentVersion(t *testing.T) {
+	if DefaultImage != appx.AgentImage {
+		t.Errorf("DefaultImage %q != appx.AgentImage %q — it must derive from AGENT_VERSION",
+			DefaultImage, appx.AgentImage)
+	}
+	if !strings.HasSuffix(DefaultImage, ":"+appx.AgentVersion) {
+		t.Errorf("DefaultImage %q does not carry AGENT_VERSION %q",
+			DefaultImage, appx.AgentVersion)
+	}
+}
+
+// TestNoHardcodedImageTagsInShell asserts the deploy scripts derive the image ref
+// from AGENT_VERSION instead of each carrying a copy of the tag. Before
+// centralisation the same version was pasted into five shell locations; every one
+// was a place to forget on an upgrade, and a missed one meant appx pulled one
+// image and ran another. agent-version.sh is exempt: building the ref is its job.
+func TestNoHardcodedImageTagsInShell(t *testing.T) {
+	root := filepath.Join("..", "..")
+	for _, rel := range [][]string{
+		{"deploy", "tools-install.sh"},
+		{"deploy", "bootstrap.sh"},
+		{"deploy", "verify-installation.sh"},
+		{"scripts", "smoke-deploy.sh"},
+	} {
+		path := filepath.Join(append([]string{root}, rel...)...)
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s: %v", path, err)
+		}
+		for i, line := range strings.Split(string(data), "\n") {
+			code := strings.TrimSpace(line)
+			if strings.HasPrefix(code, "#") {
+				continue // comments may legitimately name the registry path
+			}
+			if strings.Contains(code, appx.AgentImageRepo+":") {
+				t.Errorf("%s:%d hardcodes an agent image tag — source "+
+					"deploy/agent-version.sh and use $AGENT_IMAGE instead:\n\t%s",
+					path, i+1, code)
+			}
+		}
+	}
+}
+
+// TestAgentVersion_MatchesWebPackageJSON covers the one duplication that cannot
+// be centralised away: npm resolves dependencies only from package.json, so the
+// agent-client range can't be read out of AGENT_VERSION at install time. The
+// three appx-agent packages are versioned in lockstep by changesets, so the range
+// must track AGENT_VERSION — otherwise the frontend bundles an SDK built against
+// a different agent-server contract than the image appx supervises.
+func TestAgentVersion_MatchesWebPackageJSON(t *testing.T) {
+	path := filepath.Join("..", "..", "web", "package.json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	var pkg struct {
+		Dependencies map[string]string `json:"dependencies"`
+	}
+	if err := json.Unmarshal(data, &pkg); err != nil {
+		t.Fatalf("parse %s: %v", path, err)
+	}
+
+	const dep = "@appx-org/agent-client"
+	got, ok := pkg.Dependencies[dep]
+	if !ok {
+		t.Fatalf("%s has no %s dependency", path, dep)
+	}
+	// A `file:`/`link:` spec means a committed local override, which breaks every
+	// build outside the author's machine. The npm-link dev flow in
+	// docs/readme/local-development.md must stay uncommitted.
+	if strings.HasPrefix(got, "file:") || strings.HasPrefix(got, "link:") {
+		t.Fatalf("%s pins %s to a local path (%q) — do not commit a linked SDK",
+			path, dep, got)
+	}
+	// A caret range is intended (patch pickup within 0.1.x); the lockfile pins the
+	// exact resolution. What matters is that the floor tracks AGENT_VERSION.
+	if want := "^" + appx.AgentVersion; got != want {
+		t.Errorf("%s pins %s at %q but AGENT_VERSION is %q (want %q).\n"+
+			"After editing AGENT_VERSION run: task agent:sync\n"+
+			"(a bare `npm install` will not fix this — it resolves within the "+
+			"existing range instead of rewriting it)",
+			path, dep, got, appx.AgentVersion, want)
 	}
 }
 

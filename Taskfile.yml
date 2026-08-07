@@ -1,6 +1,56 @@
 version: "3"
 
 tasks:
+  agent:sync:
+    desc: Sync web/package.json to AGENT_VERSION (run after editing that file)
+    # The script is long; echoing it would bury its own error messages.
+    silent: true
+    # AGENT_VERSION is the single source of truth for the appx-agent release, but
+    # npm resolves dependencies only from package.json, so that one range has to
+    # be written out. `npm install` alone will NOT do it — it resolves *within*
+    # the existing range, so a bumped AGENT_VERSION would silently leave the
+    # frontend on the old major.minor. `npm pkg set` rewrites the range itself.
+    #
+    # Caveat on DOWNGRADES: a caret range keeps a satisfying lockfile entry, so
+    # going 0.1.7 -> ^0.1.6 leaves 0.1.7 installed (it satisfies ^0.1.6). That is
+    # correct npm behaviour and harmless for the intended forward direction. To
+    # force an exact older resolution, follow up with:
+    #   cd web && npm install @appx-org/agent-client@<version> --save-exact
+    cmds:
+      - |
+        set -eu
+        version="$(grep -v '^[[:space:]]*#' AGENT_VERSION | tr -d '[:space:]')"
+        [ -n "$version" ] || { echo "AGENT_VERSION is empty" >&2; exit 1; }
+        cd web
+
+        # Fail before touching anything if the version isn't published — npm pkg
+        # set writes package.json immediately, so without this check a typo'd or
+        # unreleased version leaves the repo half-synced (range bumped, lockfile
+        # stale, nothing installed).
+        if ! npm view "@appx-org/agent-client@$version" version >/dev/null 2>&1; then
+          echo "ERROR: @appx-org/agent-client@$version is not published." >&2
+          echo "       Check AGENT_VERSION against the npm registry:" >&2
+          echo "         npm view @appx-org/agent-client versions" >&2
+          exit 1
+        fi
+
+        # Restore package.json + lockfile if the install fails partway.
+        cp package.json .package.json.bak
+        cp package-lock.json .package-lock.json.bak
+        restore() {
+          mv .package.json.bak package.json
+          mv .package-lock.json.bak package-lock.json
+          echo "sync failed — restored package.json + lockfile" >&2
+        }
+        trap restore EXIT
+
+        npm pkg set "dependencies.@appx-org/agent-client=^$version"
+        npm install
+
+        trap - EXIT
+        rm -f .package.json.bak .package-lock.json.bak
+        echo "web/package.json + lockfile synced to agent ^$version"
+
   web:
     desc: Build frontend and copy to embed directory
     cmds:
@@ -16,17 +66,11 @@ tasks:
       - web/package-lock.json
       - web/vite.config.ts
       - web/tsconfig*.json
-      # Linked SDK source: @appx-org/agent-chat-ui is a file: dependency on the
-      # sibling agent-chat repo and is bundled from source, so edits there must
-      # invalidate this task. In CI/prod the package is installed from the
-      # registry and this path matches nothing, so the fingerprint quietly falls
-      # back to the entries above (Task ignores non-matching globs).
-      - ../agent-chat/src/**/*
     generates:
       - cmd/appx/web/dist/**/*
 
   build:
-    desc: Build frontend and Go binary (use `task build --force` to force a full rebuild, e.g. after editing the linked agent-chat-ui)
+    desc: Build frontend and Go binary (use `task build --force` to force a full rebuild)
     deps: [web]
     env:
       GOCACHE: "{{.ROOT_DIR}}/.go-build-cache"

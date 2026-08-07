@@ -18,6 +18,13 @@ if [ "$(id -u)" -ne 0 ]; then
   exit 1
 fi
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# The pinned agent-server image (AGENT_IMAGE), from the repo-root AGENT_VERSION
+# file. Used only as the fallback when the env file doesn't name one.
+# shellcheck source=agent-version.sh
+. "$SCRIPT_DIR/agent-version.sh"
+
 PASS=0
 FAIL=0
 
@@ -179,9 +186,42 @@ echo "=== 7. Outer image ==="
 # ---------------------------------------------------------------------------
 
 APPX_AGENT_IMAGE=$(grep '^APPX_AGENT_IMAGE=' "$ENV_FILE" 2>/dev/null | cut -d= -f2- || true)
-APPX_AGENT_IMAGE="${APPX_AGENT_IMAGE:-builder-outer}"
+APPX_AGENT_IMAGE="${APPX_AGENT_IMAGE:-$AGENT_IMAGE}"
 expect_ok "outer image '$APPX_AGENT_IMAGE' present" \
   docker image inspect "$APPX_AGENT_IMAGE"
+
+# The image is the distribution channel for the seccomp profile, so a pulled
+# image that lacks it would leave appx unable to start the container.
+image_ships_seccomp() {
+  local cid tmp rc
+  tmp=$(mktemp) || return 1
+  cid=$(docker create "$APPX_AGENT_IMAGE" 2>/dev/null) || { rm -f "$tmp"; return 1; }
+  docker cp "$cid:/opt/appx/seccomp-builder.json" "$tmp" >/dev/null 2>&1
+  rc=$?
+  docker rm "$cid" >/dev/null 2>&1
+  # A zero-byte result means the path existed but copied nothing useful.
+  [ "$rc" -eq 0 ] && [ -s "$tmp" ] || rc=1
+  rm -f "$tmp"
+  return "$rc"
+}
+expect_ok "outer image ships the seccomp profile" image_ships_seccomp
+
+# The installed profile must match what the image carries; a mismatch means a
+# stale /etc/appx copy from a previous image is being applied.
+installed_seccomp_matches_image() {
+  local cid tmp rc
+  tmp=$(mktemp) || return 1
+  cid=$(docker create "$APPX_AGENT_IMAGE" 2>/dev/null) || { rm -f "$tmp"; return 1; }
+  docker cp "$cid:/opt/appx/seccomp-builder.json" "$tmp" >/dev/null 2>&1
+  rc=$?
+  docker rm "$cid" >/dev/null 2>&1
+  if [ "$rc" -eq 0 ]; then
+    cmp -s "$tmp" /etc/appx/seccomp-builder.json || rc=1
+  fi
+  rm -f "$tmp"
+  return "$rc"
+}
+expect_ok "installed seccomp profile matches the image's" installed_seccomp_matches_image
 
 # ---------------------------------------------------------------------------
 echo ""
