@@ -16,7 +16,7 @@ task clean          # Remove build artifacts
 
 ## Architecture
 
-Single Go binary serves everything on one port (HTTPS or HTTP in dev mode). Pi runs behind the `agent-server` service on `localhost:4001`. agent-server owns project identity, the on-disk project directory (including each project's `.pi/` harness), session transcripts, models, and credentials; appx is a **control plane + authorizing gateway** that owns auth, TLS, port/subdomain assignment, egress policy, and a per-project SQLite record, and proxies agent traffic to agent-server. See `.superpowers/specs/2026-06-09-project-ownership-and-agent-client-integration-adr.md`.
+Single Go binary serves everything on one port (HTTPS or HTTP in dev mode). Pi runs behind the `agent-server` service on `localhost:4001`. agent-server owns project identity, the on-disk project directory (including each project's `.pi/` harness), session transcripts, models, and credentials; appx is a **control plane + authorizing gateway** that owns auth, TLS, port/subdomain assignment, egress policy, and a per-project SQLite record, and proxies agent traffic to agent-server. See `.superpowers/specs/2026-06-09-project-ownership-and-agent-chat-integration-adr.md` (written when the SDK was still called agent-chat).
 
 ### Dependency on the agent stack
 

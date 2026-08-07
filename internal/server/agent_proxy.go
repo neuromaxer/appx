@@ -97,7 +97,7 @@ func cleanAgentServerPath(prefix string, agentPath string) string {
 }
 
 // agentServerMirrorHandler proxies the agent-server `/v1` contract 1:1 under a
-// single same-origin appx mount, so the agent-chat SDK can talk to agent-server
+// single same-origin appx mount, so the agent-client SDK can talk to agent-server
 // through appx without per-operation URL rewriting (the SDK is configured with
 // one baseUrl + the native `/v1` prefix). The browser sees only same-origin
 // appx URLs; the agent-server bearer token and the appx cookie stay
