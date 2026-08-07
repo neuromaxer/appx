@@ -16,17 +16,11 @@ tasks:
       - web/package-lock.json
       - web/vite.config.ts
       - web/tsconfig*.json
-      # Linked SDK source: @appx-org/agent-chat-ui is a file: dependency on the
-      # sibling agent-chat repo and is bundled from source, so edits there must
-      # invalidate this task. In CI/prod the package is installed from the
-      # registry and this path matches nothing, so the fingerprint quietly falls
-      # back to the entries above (Task ignores non-matching globs).
-      - ../agent-chat/src/**/*
     generates:
       - cmd/appx/web/dist/**/*
 
   build:
-    desc: Build frontend and Go binary (use `task build --force` to force a full rebuild, e.g. after editing the linked agent-chat-ui)
+    desc: Build frontend and Go binary (use `task build --force` to force a full rebuild)
     deps: [web]
     env:
       GOCACHE: "{{.ROOT_DIR}}/.go-build-cache"

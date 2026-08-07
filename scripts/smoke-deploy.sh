@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # scripts/smoke-deploy.sh — Stage 3 cross-service gate. DETERMINISTIC, NO LLM.
 #
-# Sibling of agent-server's scripts/container-smoke.sh, but it exercises the
+# Counterpart to appx-agent's container smoke test, but it exercises the
 # **appx proxy**: appx (container mode) creates/supervises the outer container,
 # registers a project, and routes DEV/PROD subdomain traffic into it. The deploy
 # skill's literal commands run via `docker exec` (no LLM — deterministic infra
@@ -20,25 +20,18 @@ REPO_DIR="$(pwd)"
 # ── config ───────────────────────────────────────────────────────────────────
 
 readonly NAME="builder-outer"
-readonly IMAGE="${APPX_AGENT_IMAGE:-builder-outer}"
+readonly IMAGE="${APPX_AGENT_IMAGE:-ghcr.io/appx-org/agent-server:0.1.6}"
 readonly PROJECT="smoke-app"
 readonly APP_PORT=8080                      # vite-spa template's nginx listen
 APPX_PORT="${APPX_PORT:-8088}"
 readonly BASE_DOMAIN="127.0.0.1.sslip.io"
-readonly SECCOMP="$REPO_DIR/deploy/builder-container/seccomp-builder.json"
-AGENT_SERVER_DIR="${AGENT_SERVER_DIR:-}"
 DATA_DIR="$(mktemp -d /tmp/appx-smoke.XXXXXX)"
 COOKIES="$DATA_DIR/cookies.txt"
+# Extracted from $IMAGE in step 1, exactly as deploy/tools-install.sh does.
+readonly SECCOMP="$DATA_DIR/seccomp-builder.json"
 APPX_PID=""
 PASS_COUNT=0
 FAIL_COUNT=0
-
-# Locate the agent-server checkout (for building the outer image).
-if [ -z "$AGENT_SERVER_DIR" ]; then
-	for cand in "$REPO_DIR/../agent-server" "$HOME/agent-server"; do
-		[ -f "$cand/container/Dockerfile" ] && { AGENT_SERVER_DIR="$(cd "$cand" && pwd)"; break; }
-	done
-fi
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -148,22 +141,28 @@ wait_appx() { # poll appx until it answers (implies the outer container is healt
 # ── 0. preflight + clean slate ───────────────────────────────────────────────
 
 echo "[0] preflight + clean slate"
-if [ -z "$AGENT_SERVER_DIR" ]; then
-	echo "FATAL: agent-server checkout not found; set AGENT_SERVER_DIR" >&2
-	exit 1
-fi
-[ -f "$SECCOMP" ] || { echo "FATAL: seccomp profile missing at $SECCOMP" >&2; exit 1; }
 command -v docker >/dev/null || { echo "FATAL: docker not installed" >&2; exit 1; }
 command -v go >/dev/null || { echo "FATAL: go not installed" >&2; exit 1; }
 docker rm -f "$NAME" > /dev/null 2>&1 || true
 docker volume rm builder-workspace builder-podman-storage > /dev/null 2>&1 || true
-echo "  data dir: $DATA_DIR  | agent-server: $AGENT_SERVER_DIR"
+echo "  data dir: $DATA_DIR  | image: $IMAGE"
 
-# ── 1. build the outer image + the appx binary ───────────────────────────────
+# ── 1. pull the outer image + extract seccomp + build the appx binary ─────────
 
-echo "[1] build outer image + appx binary"
-check "build outer image ($IMAGE) from agent-server" \
-	docker build -f "$AGENT_SERVER_DIR/container/Dockerfile" -t "$IMAGE" "$AGENT_SERVER_DIR"
+echo "[1] pull outer image, extract seccomp profile, build appx binary"
+check "pull outer image ($IMAGE)" docker pull "$IMAGE"
+
+# Mirror tools-install.sh: the profile comes out of the image, not this repo.
+extract_seccomp() {
+	local cid rc
+	cid=$(docker create "$IMAGE") || return 1
+	docker cp "$cid:/opt/appx/seccomp-builder.json" "$SECCOMP" >/dev/null 2>&1
+	rc=$?
+	docker rm "$cid" >/dev/null 2>&1
+	[ "$rc" -eq 0 ] && [ -s "$SECCOMP" ]
+}
+check "extract seccomp profile from the image" extract_seccomp
+
 # Embed needs cmd/appx/web/dist; a placeholder is enough for an infra smoke
 # (we drive APIs + the proxy, not the React UI).
 mkdir -p "$REPO_DIR/cmd/appx/web/dist"

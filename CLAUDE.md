@@ -16,7 +16,21 @@ task clean          # Remove build artifacts
 
 ## Architecture
 
-Single Go binary serves everything on one port (HTTPS or HTTP in dev mode). Pi runs behind the sibling `agent-server` service on `localhost:4001`. agent-server owns project identity, the on-disk project directory (including each project's `.pi/` harness), session transcripts, models, and credentials; appx is a **control plane + authorizing gateway** that owns auth, TLS, port/subdomain assignment, egress policy, and a per-project SQLite record, and proxies agent traffic to agent-server. See `.superpowers/specs/2026-06-09-project-ownership-and-agent-client-integration-adr.md`.
+Single Go binary serves everything on one port (HTTPS or HTTP in dev mode). Pi runs behind the `agent-server` service on `localhost:4001`. agent-server owns project identity, the on-disk project directory (including each project's `.pi/` harness), session transcripts, models, and credentials; appx is a **control plane + authorizing gateway** that owns auth, TLS, port/subdomain assignment, egress policy, and a per-project SQLite record, and proxies agent traffic to agent-server. See `.superpowers/specs/2026-06-09-project-ownership-and-agent-client-integration-adr.md`.
+
+### Dependency on the agent stack
+
+The agent stack lives in the separate [appx-agent](https://github.com/appx-org/appx-agent) monorepo and is consumed **only as published artifacts** — never as sibling checkouts or vendored copies:
+
+| Artifact | Consumed as | Pinned in |
+| --- | --- | --- |
+| `agent-server` | `ghcr.io/appx-org/agent-server` docker image (public, amd64-only) | `containerruntime.DefaultImage`, `DEFAULT_AGENT_IMAGE` in `deploy/tools-install.sh`, `APPX_AGENT_IMAGE` in `deploy/bootstrap.sh` |
+| `@appx-org/agent-client` | public npm package (ships compiled `dist/`) | `web/package.json` |
+| `@appx-org/agent-protocol` | public npm, transitive via agent-client | — |
+
+The image ref is duplicated in three files because shell cannot import Go constants; `TestDefaultImage_MatchesDeployScripts` fails the build if they drift. Pin a semver tag or digest — never `latest`/`edge`, which would make deploys irreproducible.
+
+The outer container's **tailored seccomp profile** is a `docker run --security-opt` argument, so it must be a host file. `deploy/tools-install.sh` extracts it from the pulled image (`/opt/appx/seccomp-builder.json` → `/etc/appx/seccomp-builder.json`) rather than vendoring a copy, so the applied profile is always the one the image was built with. Do not reintroduce a checked-in copy.
 
 - `localhost:<port>`: appx dashboard, embedded React SPA, and REST API.
 - `/api/*`: public `POST /api/login`, protected everything else.
@@ -66,19 +80,18 @@ web/src/
   pages/Settings.tsx           # Pi credentials, subscriptions, custom providers
 deploy/
   appx.service                 # systemd unit for appx (container mode; ordered after docker.service)
-  builder-container/           # tailored seccomp profile installed to /etc/appx/
   bootstrap.sh                 # Full install/update flow (container mode only)
-  system-setup.sh              # appx user, projects group, dirs, seccomp, docker group, unit
-  tools-install.sh             # Go, Node.js, Task, + builds the outer image
+  system-setup.sh              # appx user, projects group, dirs, /etc/appx, docker group, unit
+  tools-install.sh             # Go, Node.js, Task, + pulls the agent image & extracts its seccomp profile
 ```
 
 ## Tech Stack
 
 - Backend: Go 1.26, stdlib `net/http`, `database/sql` with `modernc.org/sqlite`.
 - Frontend: React 19, Vite 8, TypeScript 5.9, react-router-dom 7.
-- Agent runtime: Pi CLI plus Appx org `agent-server`, run inside the appx-managed outer container (production); run by hand for local dev.
+- Agent runtime: Pi CLI plus `agent-server`, from the published `ghcr.io/appx-org/agent-server` image — run inside the appx-managed outer container (production) or by `docker run` for local dev.
 - Streaming: Appx frontend consumes the agent-server HTTP/SSE session contract.
-- Markdown: `marked` + `dompurify`.
+- Markdown: rendered inside agent-client (`marked` + `dompurify` are its dependencies, not appx's).
 - Deployment: Task, systemd. **Container-mode only:** appx runs as the `appx` OS user (in the `projects` + `docker` groups) and supervises the agent-server outer container; the agent runs as an unprivileged uid *inside* that container, so there is no `appx-agent` host user.
 
 ## Conventions
@@ -96,8 +109,8 @@ deploy/
 - Every exported function and component should have a JSDoc comment.
 - Keep endpoint calls in `web/src/api/client.ts`.
 - Use the existing dark Appx design tokens from `web/src/index.css`; avoid one-off hardcoded colors unless a component already does so.
-- Agent chat UI is provided by the `@appx-org/agent-client` package (linked via a `file:` dependency to the sibling `agent-client` repo and consumed as TypeScript source). It talks to the `/api/pi` mirror; do not reintroduce a hand-written session store/reducer. Re-theme via the `--ac-*` token bridge in `web/src/index.css`.
-- On 401, redirect to `/login`.
+- Agent chat UI is provided by the `@appx-org/agent-client` npm package. It talks to the `/api/pi` mirror; do not reintroduce a hand-written session store/reducer, and do not re-link it to a local checkout in committed code (see `docs/readme/local-development.md` for the `npm link` dev override). Re-theme via the `--ac-*` token bridge in `web/src/index.css`.
+- On 401, redirect to `/login` via `redirectToLogin()` from `api/client.ts` — assigning `window.location` inline inside a hook trips `react-hooks/immutability`.
 
 ### Build
 
@@ -120,8 +133,9 @@ Add or update tests when behavior changes, especially for server routes, databas
 
 ## Deployment Notes
 
-- `deploy/bootstrap.sh` is first-run setup (container mode only: appx as the `appx` systemd service supervising the agent-server outer container).
-- `task server:deploy` pulls, rebuilds, installs, rebuilds the outer image, restarts `appx`, then verifies.
+- `deploy/bootstrap.sh` is first-run setup (container mode only: appx as the `appx` systemd service supervising the agent-server outer container). It needs no sibling checkouts — the agent image is pulled and the SDK comes from npm.
+- `task server:deploy` pulls code, rebuilds, installs, re-pulls the pinned agent image (re-extracting its seccomp profile), restarts `appx`, then verifies.
+- Deploy hosts must be **amd64**: the published agent-server image is amd64-only and is no longer built on the box.
 - The agent (agent-server + Pi) runs as an unprivileged uid **inside** the outer container, not as a host user; provider secrets reach it via the service env (`/etc/appx/secrets.env`, `root:root 0600`), forwarded into the container by name.
 - The Docker daemon (`--restart unless-stopped`) keeps the outer container alive across crash + reboot; appx's startup `EnsureRunning` re-attaches idempotently (never auto-recreates on drift). `appx.service` is ordered `After=docker.service`.
 - `appx` is in the `docker` group (root-equivalent — accepted on a dedicated box; Stage 5 scopes it down). It binds 443 via `CAP_NET_BIND_SERVICE`, not root.

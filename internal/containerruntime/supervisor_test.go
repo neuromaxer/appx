@@ -414,6 +414,74 @@ func TestLoadOrCreateToken_TightensPerms(t *testing.T) {
 	}
 }
 
+// --- the pinned agent image -------------------------------------------------
+
+// TestDefaultImage_IsPublishedRegistryRef guards the shape of the pinned image:
+// appx consumes the agent-server artifact published from the appx-org/appx-agent
+// monorepo, so the default must be a pullable registry reference. A bare local
+// tag (the pre-monorepo default was "builder-outer") would make a fresh deploy
+// fail at pull time on any box that never built the image by hand.
+func TestDefaultImage_IsPublishedRegistryRef(t *testing.T) {
+	if !strings.Contains(DefaultImage, "/") {
+		t.Errorf("DefaultImage %q is not a registry reference — deploy pulls it", DefaultImage)
+	}
+	if !strings.HasPrefix(DefaultImage, "ghcr.io/appx-org/agent-server") {
+		t.Errorf("DefaultImage %q is not the published agent-server image", DefaultImage)
+	}
+	// Unpinned images make deploys irreproducible: two boxes bootstrapped a week
+	// apart would silently run different agent versions.
+	if !strings.Contains(DefaultImage, ":") || strings.HasSuffix(DefaultImage, ":latest") ||
+		strings.HasSuffix(DefaultImage, ":edge") {
+		t.Errorf("DefaultImage %q must pin a semver tag or digest, not a floating tag", DefaultImage)
+	}
+	// DefaultName is the local container name, a distinct concept — if it ever
+	// picks up the registry ref, `docker logs builder-outer` and the volumes
+	// break.
+	if strings.Contains(DefaultName, "/") {
+		t.Errorf("DefaultName %q must stay a plain container name", DefaultName)
+	}
+}
+
+// TestDefaultImage_MatchesDeployScripts pins the Go default and the deploy
+// scripts' copies of the image ref together. The value is duplicated across
+// three files (Go, tools-install.sh, bootstrap.sh) because shell cannot import
+// Go constants; this test is what stops them drifting, which would otherwise
+// mean appx pulls one image and runs another.
+func TestDefaultImage_MatchesDeployScripts(t *testing.T) {
+	// internal/containerruntime -> repo root
+	root := filepath.Join("..", "..")
+	for _, tc := range []struct{ file, assign string }{
+		{filepath.Join(root, "deploy", "tools-install.sh"), "DEFAULT_AGENT_IMAGE="},
+		{filepath.Join(root, "deploy", "bootstrap.sh"), "APPX_AGENT_IMAGE="},
+	} {
+		data, err := os.ReadFile(tc.file)
+		if err != nil {
+			t.Fatalf("read %s: %v", tc.file, err)
+		}
+		var found bool
+		for _, line := range strings.Split(string(data), "\n") {
+			line = strings.TrimSpace(line)
+			// Skip comments so prose mentioning the var doesn't match.
+			if strings.HasPrefix(line, "#") || !strings.HasPrefix(line, tc.assign) {
+				continue
+			}
+			got := strings.Trim(strings.TrimPrefix(line, tc.assign), `"'`)
+			// tools-install.sh also has the ${APPX_AGENT_IMAGE:-$DEFAULT...} line.
+			if strings.HasPrefix(got, "$") {
+				continue
+			}
+			found = true
+			if got != DefaultImage {
+				t.Errorf("%s has %s%q, want %q (keep in sync with DefaultImage)",
+					tc.file, tc.assign, got, DefaultImage)
+			}
+		}
+		if !found {
+			t.Errorf("%s: no literal %s<image> assignment found", tc.file, tc.assign)
+		}
+	}
+}
+
 // --- spec construction from config ------------------------------------------
 
 func TestBuildSpec_Defaults(t *testing.T) {

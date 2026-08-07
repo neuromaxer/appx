@@ -22,14 +22,13 @@
 }
 
 /*
- * agent-chat-ui theme bridge. The @appx-org/agent-chat-ui package resolves every
+ * agent-client theme bridge. The @appx-org/agent-client package resolves every
  * visual value to an `--ac-*` custom property (defaulting to its own dark
  * theme). We remap those onto Appx's design tokens here so the embedded chat
  * inherits the Appx palette. This block is loaded after the package stylesheet
  * (see main.tsx import order) and targets the same selectors the defaults use,
  * so equal-specificity cascade order makes these win.
  */
-.agent-chat-root,
 .agent-client-root,
 .agent-settings,
 .agent-chat-chat-panel,

@@ -87,8 +87,19 @@ done
 # ---------------------------------------------------------------------------
 
 rm -f "$ENV_FILE"
+# The seccomp profile is extracted from the agent image by tools-install.sh, so
+# it is a generated artifact — remove it too, or /etc/appx never goes away.
+# secrets.env is deliberately NOT removed unless --purge-data: it holds
+# credentials the operator may not have stored elsewhere.
+rm -f /etc/appx/seccomp-builder.json
+if [ "$PURGE_DATA" -eq 1 ]; then
+  rm -f /etc/appx/secrets.env
+fi
 rmdir /etc/appx 2>/dev/null || true
-echo "removed config: $ENV_FILE"
+echo "removed config: $ENV_FILE and /etc/appx/seccomp-builder.json"
+if [ "$PURGE_DATA" -eq 0 ] && [ -f /etc/appx/secrets.env ]; then
+  echo "kept /etc/appx/secrets.env (provider credentials; --purge-data removes it)"
+fi
 
 if [ "$PURGE_DATA" -eq 1 ]; then
   rm -rf "$DATA_DIR" /home/appx-agent

@@ -1,7 +1,7 @@
 import { useMemo, type CSSProperties } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AgentChatProvider, AgentSettings, createAgentClient } from '@appx-org/agent-client';
-import { logout } from '../api/client';
+import { logout, redirectToLogin } from '../api/client';
 
 /**
  * Settings page chrome. The provider-credential management UI itself lives in
@@ -20,9 +20,7 @@ export default function Settings() {
       createAgentClient({
         baseUrl: '/api/pi',
         pathPrefix: '/v1',
-        onUnauthorized: () => {
-          window.location.href = '/login';
-        },
+        onUnauthorized: redirectToLogin,
       }),
     [],
   );

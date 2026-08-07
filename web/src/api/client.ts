@@ -1,6 +1,20 @@
 const BASE = '/api';
 
 /**
+ * redirectToLogin sends the browser to the login page after the session is
+ * rejected. A full navigation (not a router push) is deliberate: it discards all
+ * in-memory state tied to the dead session.
+ *
+ * Wrapping the assignment also keeps `react-hooks/immutability` satisfied at the
+ * call sites that pass this as an `onUnauthorized` callback — the rule flags
+ * assigning to a value defined outside the component, which is exactly what
+ * `window.location.href = ...` looks like inside a `useMemo`.
+ */
+export function redirectToLogin(): void {
+  window.location.assign('/login');
+}
+
+/**
  * request is the shared HTTP client for all API calls. It prepends the /api
  * base path, sets JSON content-type, and throws on non-2xx responses.
  */
@@ -11,7 +25,7 @@ async function request<T>(path: string, opts?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     if (res.status === 401) {
-      window.location.href = '/login';
+      redirectToLogin();
       throw new Error('Unauthorized');
     }
     throw new Error(await res.text());
