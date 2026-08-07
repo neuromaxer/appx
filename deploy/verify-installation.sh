@@ -179,7 +179,7 @@ echo "=== 7. Outer image ==="
 # ---------------------------------------------------------------------------
 
 APPX_AGENT_IMAGE=$(grep '^APPX_AGENT_IMAGE=' "$ENV_FILE" 2>/dev/null | cut -d= -f2- || true)
-APPX_AGENT_IMAGE="${APPX_AGENT_IMAGE:-ghcr.io/appx-org/agent-server:0.1.6}"
+APPX_AGENT_IMAGE="${APPX_AGENT_IMAGE:-ghcr.io/appx-org/agent-server:0.1.7}"
 expect_ok "outer image '$APPX_AGENT_IMAGE' present" \
   docker image inspect "$APPX_AGENT_IMAGE"
 

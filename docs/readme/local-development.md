@@ -30,7 +30,7 @@ docker run --rm -it \
   --name agent-server-dev \
   -p 127.0.0.1:4001:4001 \
   -v ~/appx-data/projects:/workspace \
-  ghcr.io/appx-org/agent-server:0.1.6
+  ghcr.io/appx-org/agent-server:0.1.7
 ```
 
 The image is amd64-only today, so on Apple Silicon add `--platform linux/amd64`

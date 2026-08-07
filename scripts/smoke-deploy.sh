@@ -20,7 +20,7 @@ REPO_DIR="$(pwd)"
 # ── config ───────────────────────────────────────────────────────────────────
 
 readonly NAME="builder-outer"
-readonly IMAGE="${APPX_AGENT_IMAGE:-ghcr.io/appx-org/agent-server:0.1.6}"
+readonly IMAGE="${APPX_AGENT_IMAGE:-ghcr.io/appx-org/agent-server:0.1.7}"
 readonly PROJECT="smoke-app"
 readonly APP_PORT=8080                      # vite-spa template's nginx listen
 APPX_PORT="${APPX_PORT:-8088}"

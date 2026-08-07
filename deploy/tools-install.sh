@@ -33,7 +33,7 @@ REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 # The published agent-server image appx is tested against. Keep in sync with
 # containerruntime.DefaultImage (internal/containerruntime/config.go) and the
 # APPX_AGENT_IMAGE default written by bootstrap.sh.
-DEFAULT_AGENT_IMAGE="ghcr.io/appx-org/agent-server:0.1.6"
+DEFAULT_AGENT_IMAGE="ghcr.io/appx-org/agent-server:0.1.7"
 
 # Detect architecture.
 ARCH=$(dpkg --print-architecture 2>/dev/null || echo "amd64")

@@ -65,7 +65,7 @@ const (
 	// from source; the tag is a semver release, pinned here so an appx build
 	// always knows which agent contract it was tested against. Override with
 	// APPX_AGENT_IMAGE (a tag or a @sha256: digest).
-	DefaultImage = "ghcr.io/appx-org/agent-server:0.1.6"
+	DefaultImage = "ghcr.io/appx-org/agent-server:0.1.7"
 	// DefaultName is the local docker container name — unrelated to the image
 	// ref, and kept stable so existing deployments' troubleshooting commands
 	// (docker logs builder-outer) and volumes keep working.
